@@ -16,10 +16,10 @@ type Storage interface {
 }
 
 type Service struct {
-	st Storage
+	storage Storage
 }
 
-func New(st Storage) *Service { return &Service{st: st} }
+func New(storage Storage) *Service { return &Service{storage: storage} }
 
 var allowed = map[string]struct{}{
 	"RUB": {}, "USD": {}, "EUR": {}, "JPY": {},
@@ -117,7 +117,7 @@ func (s *Service) GetPairRate(ctx context.Context, base, quote string) (*PairRat
 }
 
 func (s *Service) getLatestRUBTo(ctx context.Context, quote string) (*models.CurrencyLatestRate, error) {
-	rows, err := s.st.GetLatest(ctx, "RUB", []string{quote})
+	rows, err := s.storage.GetLatest(ctx, "RUB", []string{quote})
 	if err != nil {
 		return nil, fmt.Errorf("get latest RUB/%s: %w", quote, err)
 	}

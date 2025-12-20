@@ -61,8 +61,9 @@ func (c *CurrencyStorage) UpsertRatesMap(
 		_, err := tx.Exec(ctx, `
 insert into currency_rate (base_ccy, quote_ccy, as_of_date, rate, fetched_at)
 values ($1, $2, $3::date, $4::numeric, now())
-on conflict (base_ccy, quote_ccy, as_of_date)
+on conflict (base_ccy, quote_ccy)
 do update set
+  as_of_date = excluded.as_of_date,
   rate = excluded.rate,
   fetched_at = now();
 `, base, quote, asOf, rate)

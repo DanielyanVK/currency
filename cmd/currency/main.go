@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"service-currency/internal/service/logger"
 	"syscall"
 	"time"
 
@@ -51,7 +52,7 @@ func run(ctx context.Context) error {
 	// storage + migrations
 	storage := postgresql.NewCurrencyStorage(pool)
 	migrator := migrations.New(pool)
-	if err := migrator.SetupLatestTable(dbCtx); err != nil {
+	if err := migrator.Setup(dbCtx); err != nil {
 		return fmt.Errorf("ensure tables: %w", err)
 	}
 
@@ -75,9 +76,13 @@ func run(ctx context.Context) error {
 		cron.WithParser(cron.NewParser(cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow)),
 	)
 
+	// logger
+	reqLogStorage := postgresql.NewRequestLogStorage(pool)
+	reqLogger := logger.New(reqLogStorage)
+
 	// rates HTTP handler
 	ratesService := ratessvc.New(storage)
-	ratesHandler := rateshttp.New(ratesService)
+	ratesHandler := rateshttp.New(ratesService, reqLogger)
 
 	mux := http.NewServeMux()
 	ratesHandler.Register(mux)
