@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"service-currency/internal/middleware"
 	"service-currency/internal/service/logger"
 	"syscall"
 	"time"
 
 	rateshttp "service-currency/internal/api/http/rates"
-	"service-currency/internal/clients/currencyFreaks"
+	"service-currency/internal/clients/currency_freaks"
 	"service-currency/internal/repository/migrations"
 	"service-currency/internal/repository/postgresql"
 	ratessvc "service-currency/internal/service/rates"
@@ -51,6 +52,7 @@ func run(ctx context.Context) error {
 
 	// storage + migrations
 	storage := postgresql.NewCurrencyStorage(pool)
+	apiKeyStorage := postgresql.New(pool, cfg.EncodingKey)
 	migrator := migrations.New(pool)
 	if err := migrator.Setup(dbCtx); err != nil {
 		return fmt.Errorf("ensure tables: %w", err)
@@ -80,11 +82,15 @@ func run(ctx context.Context) error {
 	reqLogStorage := postgresql.NewRequestLogStorage(pool)
 	reqLogger := logger.New(reqLogStorage)
 
-	// rates HTTP handler
+	// HTTP handler
 	ratesService := ratessvc.New(storage)
 	ratesHandler := rateshttp.New(ratesService, reqLogger)
 
 	mux := http.NewServeMux()
+
+	// Middleware
+	authMiddleware := middleware.APIKeyAuth(apiKeyStorage)
+	mw := []func(next http.Handler) http.Handler{authMiddleware}
 	ratesHandler.Register(mux)
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -105,7 +111,7 @@ func run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		return serveHTTP(gctx, ":"+cfg.HTTPPort, mux)
+		return serveHTTP(gctx, ":"+cfg.HTTPPort, mux, mw)
 	})
 
 	log.Println("Running. Stop with Ctrl+C / SIGTERM.")
@@ -123,8 +129,13 @@ func runCron(ctx context.Context, c *cron.Cron) error {
 	return nil
 }
 
-func serveHTTP(ctx context.Context, addr string, h http.Handler) error {
+func serveHTTP(ctx context.Context, addr string, h http.Handler, mws []func(http.Handler) http.Handler) error {
+	for i := len(mws) - 1; i >= 0; i-- {
+		h = mws[i](h)
+	}
+
 	srv := &http.Server{Addr: addr, Handler: h}
+
 	go func() {
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

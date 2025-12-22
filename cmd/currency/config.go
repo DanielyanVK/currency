@@ -21,6 +21,8 @@ type Config struct {
 
 	CronSpec string
 	Location string
+
+	EncodingKey string
 }
 
 func LoadConfig() (Config, error) {
@@ -44,6 +46,11 @@ func LoadConfig() (Config, error) {
 	cfg.APIKey = strings.TrimSpace(os.Getenv("CURRENCY_API_KEY"))
 	if cfg.APIKey == "" {
 		return Config{}, fmt.Errorf("CURRENCY_API_KEY is empty")
+	}
+
+	cfg.EncodingKey = strings.TrimSpace(os.Getenv("ENCODING_KEY"))
+	if cfg.EncodingKey == "" {
+		return Config{}, fmt.Errorf("ENCODING_KEY is empty")
 	}
 
 	if p := strings.TrimSpace(os.Getenv("PORT")); p != "" {

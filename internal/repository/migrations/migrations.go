@@ -22,6 +22,14 @@ func (m *Migrations) Setup(ctx context.Context) error {
 	if err := m.setupRequestLogTable(ctx); err != nil {
 		return fmt.Errorf("setup request_log: %w", err)
 	}
+
+	if err := m.createAPIKeysTable(ctx); err != nil {
+		return fmt.Errorf("create api_keys: %w", err)
+	}
+	if err := m.fillAPIKeys(ctx); err != nil {
+		return fmt.Errorf("seed api_keys: %w", err)
+	}
+
 	return nil
 }
 
@@ -66,6 +74,37 @@ create index if not exists idx_request_log_path_created_at
 `)
 	if err != nil {
 		return fmt.Errorf("ensure table request_log: %w", err)
+	}
+	return nil
+}
+
+func (m *Migrations) createAPIKeysTable(ctx context.Context) error {
+	_, err := m.pool.Exec(ctx, `
+create table if not exists api_keys (
+  id         bigserial primary key,
+  key_hash   char(64) not null unique,
+  is_active  boolean not null default true,
+  created_at timestamptz not null default now(),
+  constraint api_keys_key_hash_hex_len_chk check (length(key_hash) = 64)
+);
+`)
+	if err != nil {
+		return fmt.Errorf("ensure table api_keys: %w", err)
+	}
+	return nil
+}
+
+// тестовый метод проверить работу пары ключей
+func (m *Migrations) fillAPIKeys(ctx context.Context) error {
+	_, err := m.pool.Exec(ctx, `
+insert into api_keys (key_hash, is_active)
+values
+  ('304b4b2fc46274d0706fee081c40a26b8ff37ae67f0f3fd1c2d037311ea30b2d', true),
+  ('a09324edba7323a60743768654cab2b9f50759a465612461ed4aed473752a05e', false)
+on conflict (key_hash) do nothing;
+`)
+	if err != nil {
+		return fmt.Errorf("seed api_keys: %w", err)
 	}
 	return nil
 }
