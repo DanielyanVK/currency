@@ -8,16 +8,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"service-currency/internal/middleware"
-	"service-currency/internal/service/logger"
+	"service-currency/internal"
+	"service-currency/internal/api/http/middleware"
+	"service-currency/internal/currency_freaks"
+	"service-currency/internal/postgresql"
+	"service-currency/internal/postgresql/migrations"
 	"syscall"
 	"time"
 
 	rateshttp "service-currency/internal/api/http/rates"
-	"service-currency/internal/clients/currency_freaks"
-	"service-currency/internal/repository/migrations"
-	"service-currency/internal/repository/postgresql"
-	ratessvc "service-currency/internal/service/rates"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/robfig/cron/v3"
@@ -28,7 +27,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx); err != nil {
+	err := run(ctx)
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -52,51 +52,56 @@ func run(ctx context.Context) error {
 
 	// storage + migrations
 	storage := postgresql.NewCurrencyStorage(pool)
-	apiKeyStorage := postgresql.New(pool, cfg.EncodingKey)
+	apiKeyStorage := postgresql.NewAPIKeyStorage(pool)
 	migrator := migrations.New(pool)
-	if err := migrator.Setup(dbCtx); err != nil {
+	err = migrator.Setup(dbCtx)
+	if err != nil {
 		return fmt.Errorf("ensure tables: %w", err)
 	}
 
 	// client
-	client := currencyFreaks.New(cfg.APIKey, storage)
+	var client currencyFreaks.RatesClient = currencyFreaks.New(cfg.APIKey, storage)
 
 	// instant fetch
-	if resp, err := client.FetchAndSaveLatest(ctx, storage, cfg.BaseCCY, cfg.Symbols); err != nil {
-		log.Printf("initial fetch failed: %v", err)
-	} else {
-		log.Printf("rates updated: base=%s date=%s", resp.Base, resp.Date)
+	resp, err := client.FetchAndSaveLatest(ctx, storage, cfg.BaseCCY, cfg.Symbols)
+	if err != nil {
+		return fmt.Errorf("fetch latest: %w", err)
 	}
+
+	log.Printf("rates updated (base=%s date=%s)", resp.Base, resp.Date)
 
 	// cron
 	loc, err := time.LoadLocation(cfg.Location)
 	if err != nil {
 		return fmt.Errorf("load location %s: %w", cfg.Location, err)
 	}
+
 	scheduler := cron.New(
 		cron.WithLocation(loc),
 		cron.WithParser(cron.NewParser(cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow)),
 	)
 
 	// logger
-	reqLogStorage := postgresql.NewRequestLogStorage(pool)
-	reqLogger := logger.New(reqLogStorage)
+	reqAuditStorage := postgresql.NewRequestLogStorage(pool)
+	reqAuditLogger := internal.NewStorageAuditLogger(reqAuditStorage)
 
 	// HTTP handler
-	ratesService := ratessvc.New(storage)
-	ratesHandler := rateshttp.New(ratesService, reqLogger)
+	ratesService := internal.NewRateConverter(storage)
+	ratesHandler := rateshttp.New(ratesService, reqAuditLogger)
 
 	mux := http.NewServeMux()
 
 	// Middleware
-	authMiddleware := middleware.APIKeyAuth(apiKeyStorage)
+	apiKeyValidator := internal.NewAPIKeyValidator(apiKeyStorage, cfg.EncodingKey)
+	authMiddleware := middleware.APIKeyAuth(apiKeyValidator)
 	mw := []func(next http.Handler) http.Handler{authMiddleware}
 	ratesHandler.Register(mux)
 
-	g, gctx := errgroup.WithContext(ctx)
+	ewg, gctx := errgroup.WithContext(ctx)
 
 	_, err = scheduler.AddFunc(cfg.CronSpec, func() {
-		if resp, err := client.FetchAndSaveLatest(gctx, storage, cfg.BaseCCY, cfg.Symbols); err != nil {
+		resp, err := client.FetchAndSaveLatest(gctx, storage, cfg.BaseCCY, cfg.Symbols)
+		if err != nil {
 			log.Printf("scheduled job failed: %v", err)
 		} else {
 			log.Printf("rates updated: base=%s date=%s", resp.Base, resp.Date)
@@ -106,18 +111,19 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("add cron func: %w", err)
 	}
 
-	g.Go(func() error {
+	ewg.Go(func() error {
 		return runCron(gctx, scheduler)
 	})
 
-	g.Go(func() error {
+	ewg.Go(func() error {
 		return serveHTTP(gctx, ":"+cfg.HTTPPort, mux, mw)
 	})
 
 	log.Println("Running. Stop with Ctrl+C / SIGTERM.")
-	return g.Wait()
+	return ewg.Wait()
 }
 
+// Не могу убрать возврат ошибки, из-за требования метода ewg.Go
 func runCron(ctx context.Context, c *cron.Cron) error {
 	c.Start()
 	defer func() {

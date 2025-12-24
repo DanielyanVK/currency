@@ -1,10 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"os"
+	"service-currency/internal"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -16,8 +15,8 @@ type Config struct {
 
 	HTTPPort string
 
-	BaseCCY string
-	Symbols []string
+	BaseCCY internal.CurrencyCode
+	Symbols []internal.CurrencyCode
 
 	CronSpec string
 	Location string
@@ -26,14 +25,32 @@ type Config struct {
 }
 
 func LoadConfig() (Config, error) {
-	if err := godotenv.Overload(); err != nil {
-		log.Println(errors.New("Error loading .env file"))
+	err := godotenv.Overload()
+	if err != nil {
+		fmt.Println("Error loading .env file")
+	}
+
+	rawBaseCCY := "RUB"
+	rawBaseSymbols := []string{"EUR", "USD", "JPY"}
+
+	baseCCY, err := internal.NewCurrencyCode(rawBaseCCY)
+	if err != nil {
+		fmt.Println("invalid base currency: %w", err)
+	}
+
+	symbols := make([]internal.CurrencyCode, len(rawBaseSymbols))
+	for i, s := range rawBaseSymbols {
+		ccy, err := internal.NewCurrencyCode(s)
+		if err != nil {
+			fmt.Println("invalid symbol %q: %w", s, err)
+		}
+		symbols[i] = ccy
 	}
 
 	cfg := Config{
 		HTTPPort: "8080",
-		BaseCCY:  "RUB",
-		Symbols:  []string{"EUR", "USD", "JPY"},
+		BaseCCY:  baseCCY,
+		Symbols:  symbols,
 		CronSpec: "0 12 * * *",
 		Location: "Europe/Moscow",
 	}
