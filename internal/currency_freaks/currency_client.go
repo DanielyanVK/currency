@@ -95,7 +95,6 @@ func (c *Client) LatestRates(ctx context.Context, base internal.CurrencyCode, sy
 	return c.doRates(ctx, "/rates/latest", q)
 }
 
-// Метод HistoricalRates - заменить строки 101-117
 func (c *Client) HistoricalRates(ctx context.Context, date internal.Date, base internal.CurrencyCode, symbols []internal.CurrencyCode) (*internal.LatestRatesResponse, error) {
 	if date.IsZero() {
 		return nil, fmt.Errorf("date is empty")
