@@ -87,7 +87,7 @@ func run(ctx context.Context) error {
 
 	// HTTP handler
 	ratesService := internal.NewRateConverter(storage)
-	ratesHandler := rateshttp.New(ratesService, reqAuditLogger)
+	ratesHandler := rateshttp.New(ratesService, reqAuditLogger, client, cfg.Symbols)
 
 	mux := http.NewServeMux()
 

@@ -12,19 +12,22 @@ type APIKeyRepository interface {
 	GetStatusByHash(ctx context.Context, keyHash string) (exists bool, isActive bool, err error)
 }
 
-type APIKeyValidator struct {
+type defaultAPIKeyValidator struct { // приватная реализация
 	repo        APIKeyRepository
 	encodingKey string
 }
 
-func NewAPIKeyValidator(repo APIKeyRepository, encodingKey string) *APIKeyValidator {
-	return &APIKeyValidator{
+type APIKeyValidator interface {
+	Validate(ctx context.Context, rawKey string) (exists bool, isActive bool, err error)
+}
+
+func NewAPIKeyValidator(repo APIKeyRepository, encodingKey string) APIKeyValidator {
+	return &defaultAPIKeyValidator{
 		repo:        repo,
 		encodingKey: strings.TrimSpace(encodingKey),
 	}
 }
-
-func (v *APIKeyValidator) Validate(ctx context.Context, rawKey string) (exists bool, isActive bool, err error) {
+func (v *defaultAPIKeyValidator) Validate(ctx context.Context, rawKey string) (exists bool, isActive bool, err error) {
 	rawKey = strings.TrimSpace(rawKey)
 	if rawKey == "" {
 		return false, false, nil

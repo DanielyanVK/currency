@@ -31,6 +31,15 @@ type RateConverter struct {
 	storage Storage
 }
 
+type RatesClient interface {
+	HistoricalRates(
+		ctx context.Context,
+		date Date,
+		base CurrencyCode,
+		symbols []CurrencyCode,
+	) (*LatestRatesResponse, error)
+}
+
 func NewRateConverter(storage Storage) *RateConverter { return &RateConverter{storage: storage} }
 
 type PairRate struct {

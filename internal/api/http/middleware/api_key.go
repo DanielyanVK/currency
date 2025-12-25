@@ -1,18 +1,14 @@
 package middleware
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"service-currency/internal"
 	"strings"
 )
 
-type APIKeyValidator interface {
-	Validate(ctx context.Context, rawKey string) (exists bool, isActive bool, err error)
-}
-
-func APIKeyAuth(store APIKeyValidator) func(http.Handler) http.Handler {
+func APIKeyAuth(store internal.APIKeyValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := strings.TrimSpace(r.Header.Get("X-API-Key"))
