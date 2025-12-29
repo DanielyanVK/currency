@@ -27,7 +27,7 @@ type RatesStorage interface {
 }
 
 type Client struct {
-	baseURL    string
+	BaseURL    string
 	apiKey     string
 	httpClient *http.Client
 	storage    RatesStorage
@@ -35,7 +35,7 @@ type Client struct {
 
 func New(apiKey string, storage RatesStorage) *Client {
 	return &Client{
-		baseURL: "https://api.currencyfreaks.com/v2.0",
+		BaseURL: "https://api.currencyfreaks.com/v2.0",
 		apiKey:  apiKey,
 		httpClient: &http.Client{
 			Timeout: 20 * time.Second,
@@ -45,7 +45,7 @@ func New(apiKey string, storage RatesStorage) *Client {
 }
 
 func (c *Client) doRates(ctx context.Context, endpoint string, q url.Values) (*internal.LatestRatesResponse, error) {
-	u, err := url.Parse(c.baseURL + endpoint)
+	u, err := url.Parse(c.BaseURL + endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("parse base url: %w", err)
 	}

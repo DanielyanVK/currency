@@ -1,14 +1,11 @@
 with-expecter: true
 quiet: false
-outpkg: mock
-filename: "{{.InterfaceName}}.go"
+filename: "mock_{{.InterfaceName}}_test.go"
 mockname: "Mock{{.InterfaceName}}"
-keeptree: false
+inpackage: true
 
 packages:
   service-currency/internal:
     config:
       all: true
-      dir: "internal/mock"
       recursive: true
-      exported: true

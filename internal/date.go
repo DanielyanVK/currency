@@ -30,7 +30,10 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		t, err = time.Parse(dateTimeLayout, s)
 		if err != nil {
-			return fmt.Errorf("parse date %q: %w", s, err)
+			t, err = time.Parse(time.RFC3339, s)
+			if err != nil {
+				return fmt.Errorf("parse date %q: %w", s, err)
+			}
 		}
 	}
 

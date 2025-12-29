@@ -3,6 +3,7 @@ package internal_test
 import (
 	"context"
 	"errors"
+	"service-currency/internal"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"service-currency/internal"
 	"service-currency/internal/mock"
 )
 
